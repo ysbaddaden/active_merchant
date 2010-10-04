@@ -1,8 +1,8 @@
-require File.dirname(__FILE__) + '/../../test_helper'
+require 'test_helper'
+require File.expand_path("../../../../lib/active_merchant/billing/gateways/paybox_direct.rb", __FILE__)
 
 class RemotePayboxDirectTest < Test::Unit::TestCase
   
-
   def setup
     @gateway = PayboxDirectGateway.new(fixtures(:paybox_direct))
     
@@ -14,6 +14,11 @@ class RemotePayboxDirectTest < Test::Unit::TestCase
       :order_id => '1',
       :billing_address => address,
       :description => 'Store Purchase'
+    }
+    
+    @recurring_options = {
+      :order_id => '1',
+      :subscription_id => 'activemerchant_remote_test'
     }
   end
   
@@ -66,7 +71,6 @@ class RemotePayboxDirectTest < Test::Unit::TestCase
     assert_success credit
   end
   
-
   def test_invalid_login
     gateway = PayboxDirectGateway.new(
                 :login => '199988899',
@@ -76,4 +80,31 @@ class RemotePayboxDirectTest < Test::Unit::TestCase
     assert_failure response
     assert_equal "PAYBOX : Accès refusé ou site/rang/clé invalide", response.message
   end
+  
+  def test_recurring
+    cleanup_recurring
+    
+    # subscription
+    assert response = @gateway.recurring(@amount, @credit_card, @recurring_options)
+    assert_success response
+    assert_equal 'The transaction was approved', response.message
+    
+    # capture
+    assert response = @gateway.capture_recurring(@amount, response.authorization, @recurring_options)
+    assert_success response
+    assert_equal 'The transaction was approved', response.message
+    
+    # cancel
+    assert response = @gateway.cancel_recurring(@recurring_options)
+    assert_success response
+    assert_equal 'The transaction was approved', response.message
+  rescue => e
+    cleanup_recurring
+    raise e
+  end
+  
+  private
+    def cleanup_recurring
+      @gateway.cancel_recurring(@recurring_options)
+    end
 end

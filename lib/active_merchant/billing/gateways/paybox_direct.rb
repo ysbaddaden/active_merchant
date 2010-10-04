@@ -13,12 +13,22 @@ module ActiveMerchant #:nodoc:
 
       # Transactions hash
       TRANSACTIONS = {
-        :authorization => '00001',
-        :capture => '00002',
-        :purchase => '00003',
+        :authorization       => '00001',
+        :capture             => '00002',
+        :purchase            => '00003',
         :unreferenced_credit => '00004',
-        :void => '00005',
-        :refund => '00014'
+        :void                => '00005',
+        :refund              => '00014',
+        
+        :recurring           => '00056',
+        :update_recurring    => '00057',
+        :cancel_recurring    => '00058',
+        
+        :authorization_recurring       => '00051',
+        :capture_recurring             => '00052',
+        :purchase_recurring            => '00053',
+        :unreferenced_credit_recurring => '00054',
+        :void_recurring                => '00055'
       }
 
       CURRENCY_CODES = {
@@ -106,6 +116,76 @@ module ActiveMerchant #:nodoc:
         commit('refund', money, post)
       end
 
+      # 56
+      # 
+      # Options:
+      # 
+      # - +:subscription_id+ - REFABONNE
+      # - +:order_id+        - REFERENCE
+      def recurring(money, creditcard, options)
+        post = {}
+        add_creditcard(post, creditcard)
+        add_invoice(post, options)
+        add_subscription(post, options)
+        commit(:recurring, money, post)
+      end
+
+      # 57
+      # 
+      # - +:subscription_id+ - REFABONNE
+      # PORTEUR
+      # DATEVAL
+      # AUTORISATION
+      def update_recurring
+      end
+
+      # 58
+      # 
+      # Options:
+      # 
+      # - +:subscription_id+ - REFABONNE
+      def cancel_recurring(options)
+        post = {}
+        add_subscription(post, options)
+        commit(:cancel_recurring, nil, post)
+      end
+
+      # 51
+      # - +:subscription_id+ - REFABONNE
+      # PORTEUR
+      # DATEVAL
+      # AUTORISATION
+      def authorize_recurring
+      end
+
+      # 53
+      # - +:subscription_id+ - REFABONNE
+      # PORTEUR
+      # DATEVAL
+      def purchase_recurring
+      end
+
+      # 52
+      # - +:subscription_id+ - REFABONNE
+      # - +:authorization+   - NUMAPPEL + NUMTRANS
+      def capture_recurring(money, authorization, options)
+        post = {}
+        add_invoice(post, options)
+        add_subscription(post, options)
+        post[:numappel] = authorization[0,10]
+        post[:numtrans] = authorization[10,10]
+        commit(:capture_recurring, money, post)
+      end
+
+      # 55
+      # - +:subscription_id+ - REFABONNE
+      # DATEVAL
+      # NUMAPPEL
+      # NUMTRANS
+      def void_recurring
+      end
+
+
       def test?
         @options[:test] || Base.gateway_mode == :test
       end
@@ -125,6 +205,10 @@ module ActiveMerchant #:nodoc:
       def add_reference(post, identification)
         post[:numappel] = identification[0,10]
         post[:numtrans] = identification[10,10]
+      end
+
+      def add_subscription(post, options)
+        post[:refabonne] = options[:subscription_id] 
       end
 
       def parse(body)
@@ -171,7 +255,6 @@ module ActiveMerchant #:nodoc:
       end
 
       def post_data(action, parameters = {})
-
         parameters.update(
           :version => API_VERSION,
           :type => TRANSACTIONS[action.to_sym],
@@ -183,13 +266,11 @@ module ActiveMerchant #:nodoc:
           :pays => '',
           :archivage => parameters[:order_id]
         )
-
         parameters.collect { |key, value| "#{key.to_s.upcase}=#{CGI.escape(value.to_s)}" }.join("&")
       end
 
       def unique_id(seed = 0)
         randkey = "#{seed}#{Time.now.usec}".to_i % 2147483647 # Max paybox value for the question number
-
         "0000000000#{randkey}"[-10..-1]
       end
 
