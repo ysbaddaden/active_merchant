@@ -82,29 +82,69 @@ class RemotePayboxDirectTest < Test::Unit::TestCase
   end
   
   def test_recurring
-    cleanup_recurring
+    assert sub = @gateway.recurring(@amount, @credit_card, @recurring_options)
+    assert_success sub
+    assert_equal 'The transaction was approved', sub.message
     
-    # subscription
-    assert response = @gateway.recurring(@amount, @credit_card, @recurring_options)
-    assert_success response
-    assert_equal 'The transaction was approved', response.message
+    assert update = @gateway.update_recurring(200, @credit_card, @recurring_options)
+    assert_success update
+    assert_equal 'The transaction was approved', update.message
     
-    # capture
-    assert response = @gateway.capture_recurring(@amount, response.authorization, @recurring_options)
-    assert_success response
-    assert_equal 'The transaction was approved', response.message
-    
-    # cancel
-    assert response = @gateway.cancel_recurring(@recurring_options)
-    assert_success response
-    assert_equal 'The transaction was approved', response.message
+    assert cancel = @gateway.cancel_recurring(@recurring_options)
+    assert_success cancel
   rescue => e
     cleanup_recurring
     raise e
   end
   
+  def test_recurring_authorize_and_capture
+    sub, partial = create_recurring
+    
+    assert auth = @gateway.authorize_recurring(@amount, partial, @recurring_options)
+    assert_success auth
+    assert auth.authorization
+    assert_equal 'The transaction was approved', auth.message
+    
+    assert capture = @gateway.capture_recurring(@amount, auth.authorization, @recurring_options)
+    assert_success capture
+  ensure
+    cleanup_recurring
+  end
+  
+  def test_recurring_purchase
+    sub, partial = create_recurring
+    
+    assert response = @gateway.purchase_recurring(@amount, partial, @recurring_options)
+    assert_success response
+    assert_equal 'The transaction was approved', response.message
+  ensure
+    cleanup_recurring
+  end
+  
+  def test_recurring_purchase_and_void
+    sub, partial = create_recurring
+    
+    assert purchase = @gateway.purchase_recurring(@amount, partial, @recurring_options)
+    assert_success purchase
+    assert_equal 'The transaction was approved', purchase.message
+    assert purchase.authorization
+    
+    assert void = @gateway.void_recurring(purchase.authorization,
+      @recurring_options.merge(:amount => @amount))
+    assert_success void
+    assert_equal 'The transaction was approved', void.message
+  ensure
+    cleanup_recurring
+  end
+  
   private
     def cleanup_recurring
       @gateway.cancel_recurring(@recurring_options)
+    end
+    
+    # paybox requires you to remember partial fields from the credit card
+    def create_recurring
+      sub = @gateway.recurring(@amount, @credit_card, @recurring_options)
+      [sub, credit_card(sub.params['porteur'])]
     end
 end

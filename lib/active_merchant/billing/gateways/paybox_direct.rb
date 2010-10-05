@@ -94,8 +94,7 @@ module ActiveMerchant #:nodoc:
         requires!(options, :order_id)
         post = {}
         add_invoice(post, options)
-        post[:numappel] = authorization[0,10]
-        post[:numtrans] = authorization[10,10]
+        add_reference(post, authorization)
         commit('capture', money, post)
       end
 
@@ -116,75 +115,66 @@ module ActiveMerchant #:nodoc:
         commit('refund', money, post)
       end
 
-      # 56
-      # 
-      # Options:
-      # 
-      # - +:subscription_id+ - REFABONNE
-      # - +:order_id+        - REFERENCE
       def recurring(money, creditcard, options)
+        requires!(options, :order_id, :subscription_id)
         post = {}
         add_creditcard(post, creditcard)
-        add_invoice(post, options)
         add_subscription(post, options)
         commit(:recurring, money, post)
       end
 
-      # 57
-      # 
-      # - +:subscription_id+ - REFABONNE
-      # PORTEUR
-      # DATEVAL
-      # AUTORISATION
-      def update_recurring
+      def update_recurring(money, creditcard, options)
+        requires!(options, :subscription_id)
+        post = {}
+        add_creditcard(post, creditcard)
+        add_subscription(post, options)
+        commit(:update_recurring, money, post)
       end
 
-      # 58
-      # 
-      # Options:
-      # 
-      # - +:subscription_id+ - REFABONNE
       def cancel_recurring(options)
+        requires!(options, :subscription_id)
         post = {}
         add_subscription(post, options)
         commit(:cancel_recurring, nil, post)
       end
 
-      # 51
-      # - +:subscription_id+ - REFABONNE
-      # PORTEUR
-      # DATEVAL
-      # AUTORISATION
-      def authorize_recurring
+      def authorize_recurring(money, partial_creditcard, options)
+        requires!(options, :order_id, :subscription_id)
+        post = {}
+        add_partial_creditcard(post, partial_creditcard)
+        add_invoice(post, options)
+        add_subscription(post, options)
+        commit(:authorization_recurring, money, post)
       end
 
-      # 53
-      # - +:subscription_id+ - REFABONNE
-      # PORTEUR
-      # DATEVAL
-      def purchase_recurring
-      end
-
-      # 52
-      # - +:subscription_id+ - REFABONNE
-      # - +:authorization+   - NUMAPPEL + NUMTRANS
       def capture_recurring(money, authorization, options)
+        requires!(options, :order_id, :subscription_id)
         post = {}
         add_invoice(post, options)
         add_subscription(post, options)
-        post[:numappel] = authorization[0,10]
-        post[:numtrans] = authorization[10,10]
+        add_reference(post, authorization)
         commit(:capture_recurring, money, post)
       end
 
-      # 55
-      # - +:subscription_id+ - REFABONNE
-      # DATEVAL
-      # NUMAPPEL
-      # NUMTRANS
-      def void_recurring
+      def purchase_recurring(money, partial_creditcard, options)
+        requires!(options, :order_id, :subscription_id)
+        post = {}
+        add_partial_creditcard(post, partial_creditcard)
+        add_invoice(post, options)
+        add_subscription(post, options)
+        commit(:purchase_recurring, money, post)
       end
 
+      def void_recurring(identification, options)
+        requires!(options, :order_id, :amount, :subscription_id)
+        post ={}
+        add_invoice(post, options)
+        add_reference(post, identification)
+        add_subscription(post, options)
+        post[:porteur] = '000000000000000'
+        post[:dateval] = '0000'
+        commit(:void_recurring, options[:amount], post)
+      end
 
       def test?
         @options[:test] || Base.gateway_mode == :test
@@ -200,6 +190,11 @@ module ActiveMerchant #:nodoc:
         post[:porteur] = creditcard.number
         post[:dateval] = expdate(creditcard)
         post[:cvv] = creditcard.verification_value if creditcard.verification_value?
+      end
+
+      def add_partial_creditcard(post, creditcard)
+        post[:porteur] = creditcard.number
+        post[:dateval] = expdate(creditcard)
       end
 
       def add_reference(post, identification)
